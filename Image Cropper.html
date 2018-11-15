@@ -1,0 +1,172 @@
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
+<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/js/bootstrap.min.js"></script>
+<style>
+    /* Limit image width to avoid overflow the container */
+    img {
+        max-width: 100%; /* This rule is very important, please do not ignore this! */
+    }
+
+    #canvas {
+        height: 400px;
+        width: 600px;
+        background-color: #ffffff;
+        cursor: default;
+        border: 1px solid black;
+    }
+</style>
+
+<link rel="stylesheet" href="C:\Users\nuri.durmus\Desktop\Cropper\src\cropper.min.css" />
+<script src="C:\Users\nuri.durmus\Desktop\Cropper\src\cropper.js"></script>
+
+
+<body>
+    <div class="container" style="margin-top:20px">
+        Select images: <input type="file" name="img" multiple id="fuImages">
+        <input type="submit">
+        <div class="row">
+            <div id="result"></div>
+        </div>
+    </div>
+
+    <script>
+        String.prototype.format = function () {
+            var args = arguments;
+            args['{'] = '{';
+            args['}'] = '}';
+            return this.replace(
+                /{({|}|-?[0-9]+)}/g,
+                function (item) {
+                    var result = args[item.substring(1, item.length - 1)];
+                    return typeof result == 'undefined' ? '' : result;
+                }
+            );
+        };
+        var croppers = new Array();
+
+        $result = $('#result');
+        var renditions = [{ 'ID': 1, 'Title': 'Ana Sayfa Slider,Popup', 'Width': 1000, 'Height': 300 }, { 'ID': 2, 'Title': 'Ana Sayfa Slider Küçük Resim Url', 'Width': 99, 'Height': 65 }, { 'ID': 3, 'Title': 'Detay Sayfası Küçük Resimler', 'Width': 142, 'Height': 82 }, { 'ID': 4, 'Title': 'Tüm Haberler', 'Width': 290, 'Height': 165 }, { 'ID': 5, 'Title': 'Detay Sayfası Ana Resim', 'Width': 750, 'Height': 422 }, { 'ID': 6, 'Title': 'Sağ Menü Haberler', 'Width': 112, 'Height': 64 }, { 'ID': 7, 'Title': 'Kişi Listesi', 'Width': 150, 'Height': 100 }, { 'ID': 8, 'Title': 'Küçük Slider', 'Width': 195, 'Height': 268 }];
+
+        var template = '<div data-toggle="collapse" href="#collapse_{0}" aria-expanded="false" aria-controls="_{0}"><h4>{1}</h4></div><div class="collapse" id="collapse_{0}"><img id="croppedImage_{0}"/><br><input type="button" value="Düzenle" id="edit_{0}" onclick="SetForCropping(\'{3}\',{2})" /><br><input type="button" value="Seçimi Kaydet" id="save_{0}"  onclick="SetCropImage(\'{3}\',{2})"  /><br><input type="button" id="reset_{0}"  value="Seçimi İptal Et" onclick="RestoreCropImage(\'{3}\',{2})"  "/></div><hr>';
+
+        var imageTemplate = '<img id="canvasImage_{0}" src="{1}"/>';
+        var imageNames = new Array();
+        $("[id*='fuImages']").on('change', function () {
+            $result.html("");
+            croppers = new Array();
+            imageNames = new Array();
+            if (this.files) {
+                imageNames = new Array();
+                for (i = 0; i < this.files.length; i++) {
+                    var file = this.files[i];
+                    if (file.type.match(/^image\//)) {
+                        var reader = new FileReader();
+                        reader.onload = function (evt) {
+                            var img = new Image();
+                            img.onload = function () {
+                                file.size=img.src.length;
+                                console.log(file.size);
+                                if(imageNames.filter(i => i== "canvasImage_" + img.src.length).length>0){
+                                    alert("Aynı resim 2 defa eklenemez");
+                                    return;
+                                }
+                                imageNames.push("canvasImage_" + img.src.length);
+                                var result = "";
+                                result += ('<div class="row"><div class="col-md-6">' + imageTemplate.format(img.src.length, img.src) + '</div><div class="col-md-6">')
+                                renditions.forEach(function (rendition) {
+                                    rendition.FileName =img.src.length;
+                                    result += (template.format(GetControlUniqueName(img.src.length,rendition.ID), rendition.Title + " : " + rendition.Width + "x" + rendition.Height, rendition.ID, img.src.length));
+                                });
+                                result += "</div></div><hr>";
+                                $result.append(result);
+                                GetCanvasImages();
+                            };
+                            img.src = evt.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                }
+            }
+        });
+
+        function GetControlUniqueName(size,id) {
+            return size + "_" + id;
+        }
+
+        function GetCanvasImages() {
+            imageNames.forEach(imageName => {
+                var img = $("#" + imageName)[0];
+                if (!croppers.filter(i => i.element.id == img.id) || croppers.filter(i => i.element.id == img.id).length == 0) {
+                    const cropper = new Cropper(img, {
+                        aspectRatio: img.width / img.height,
+                        viewMode: 1,
+                        minContainerWidth: img.width,
+                        minContainerHeight: img.height,
+                        zoomable: false
+                    });
+                    cropper.disable();
+                    croppers.push(cropper);
+                    img.addEventListener('ready', function (event) {
+                        console.log("image load edildi");
+                        renditions.forEach(function (rendition) {
+                            const cropper = croppers.filter(i => i.element.id == $(event.target)[0].id)[0];
+                            console.log("Original ratio:"+rendition.Width+":"+rendition.Height);
+                            cropper.Width=rendition.Width;
+                            cropper.Height=rendition.Height;
+                            var croppedImageDataURL;
+                            if(rendition.Width>img.width){
+                                   croppedImageDataURL = cropper.setAspectRatio(rendition.Width / rendition.Height).getCroppedCanvas({ minWidth: rendition.With, minHeight: rendition.Height }).toDataURL("image/png");
+                            }
+                            else if(rendition.Height>img.height){
+                                croppedImageDataURL = cropper.setAspectRatio(rendition.Width / rendition.Height).getCroppedCanvas({ minWidth: rendition.With, minHeight: rendition.Height }).toDataURL("image/png");
+                            }
+                            else{
+                                croppedImageDataURL = cropper.setAspectRatio(rendition.Width / rendition.Height).getCroppedCanvas({ width: rendition.With, height: rendition.Height }).toDataURL("image/png");
+                            }
+                            $("#croppedImage_" +GetControlUniqueName(imageName.replace("canvasImage_",""),rendition.ID)).attr("src", croppedImageDataURL);
+                            var croppedImg=cropper.getData();
+                            console.log(croppedImg);
+                            cropper.reset();
+                        });
+                    });
+                }
+            });
+        }
+
+        function SetForCropping(imgWidth, renditionId) {
+            var rendition = renditions.filter(i => i.ID == renditionId)[0];
+            const cropper = croppers.filter(i => i.element.id =="canvasImage_"+ imgWidth)[0];
+            cropper.enable().reset();
+            cropper.setAspectRatio(rendition.Width / rendition.Height);
+            $("#save_" + GetControlUniqueName(imgWidth,renditionId)).attr('style',"display:block");
+            $("#reset_" +GetControlUniqueName(imgWidth,renditionId)).attr('style',"display:block");
+        }
+
+        function SetCropImage(imgWidth, renditionId) {
+            var rendition = renditions.filter(i => i.ID == renditionId)[0];
+            const cropper = croppers.filter(i =>i.element.id =="canvasImage_"+ imgWidth)[0];
+            var croppedImageDataURL = cropper.getCroppedCanvas({ width: rendition.Width, height: rendition.Height }).toDataURL("image/png");
+            $('#croppedImage_' +GetControlUniqueName(imgWidth,renditionId)).attr('src', croppedImageDataURL);
+            $("[id*='save_'").attr('style',"display:none");
+            $("[id*='reset_'").attr('style',"display:none");
+            $("[id*='imgCropped']").val(croppedImageDataURL);
+            cropper.disable();
+        }
+
+        function RestoreCropImage(imgWidth, renditionId) {
+            var rendition = renditions.filter(i => i.ID == renditionId)[0];
+            const cropper = croppers.filter(i =>i.element.id =="canvasImage_"+ imgWidth)[0];
+            cropper.reset();
+            var croppedImageDataURL = cropper.setAspectRatio(rendition.Width / rendition.Height).getCroppedCanvas({ width: rendition.Width, height: rendition.Height }).toDataURL("image/png");
+            $('#croppedImage_' +GetControlUniqueName(imgWidth,renditionId)).attr('src', croppedImageDataURL);
+            $("[id*='save_'").attr('style',"display:none");
+            $("[id*='reset_'").attr('style',"display:none");
+            $("[id*='imgCropped']").val("");
+        };
+        // });
+    </script>
+
+</body>
